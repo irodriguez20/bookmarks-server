@@ -1,9 +1,5 @@
-require('dotenv').config();
+const { expect } = require('chai')
+const knex = require('knex')
+const app = require('../src/app')
+const { makeBookmarksArray } = require('./bookmarks.fixtures')
 
-module.exports = {
-    'migrationDirectory': 'migrations',
-    'driver': 'pg',
-    'connectionString': (process.env.NODE_ENV === 'test')
-        ? process.env.TEST_DB_URL
-        : process.env.DB_URL
-}
