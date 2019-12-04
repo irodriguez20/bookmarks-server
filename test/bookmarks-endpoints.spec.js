@@ -2,43 +2,12 @@ const { expect } = require('chai')
 const knex = require('knex')
 const app = require('../src/app')
 const { makeBookmarksArray } = require('./bookmarks.fixtures')
-const BookmarksService = require('../src/bookmarks-service')
+const store = require('../src/store')
 
-describe(`Bookmarks service object`, function () {
+describe(`Bookmarks Endpoints`, () => {
     let db
 
-    let testBookmarks = [
-        {
-            id: 1,
-            title: 'Test title 1',
-            url: 'Test url 1',
-            description: 'Test description 1.',
-            rating: '4'
-        },
-        {
-            id: 2,
-            title: 'Test title 2',
-            url: 'Test url 2',
-            description: 'Test description 2.',
-            rating: '5'
-        },
-        {
-            id: 3,
-            title: 'Test title 3',
-            url: 'Test url 3',
-            description: 'Test description 3.',
-            rating: '3'
-        },
-        {
-            id: 4,
-            title: 'Test title 4',
-            url: 'Test url 4',
-            description: 'Test description 4.',
-            rating: '2'
-        },
-    ]
-
-    before(() => {
+    before('make knex instance', () => {
         db = knex({
             client: 'pg',
             connection: process.env.TEST_DB_URL,
@@ -52,91 +21,141 @@ describe(`Bookmarks service object`, function () {
 
     afterEach('cleanup', () => db('bookmarks').truncate())
 
-    //const testBookmarks = makeBookmarksArray;
-
-    context(`Given 'bookmarks' has data`, () => {
-        beforeEach(() => {
-            return db
-                .into('bookmarks')
-                .insert(testBookmarks)
+    describe(`Unauthorized requests`, () => {
+        it(`responds with 401 Unauthorized fro GET /bookmarks`, () => {
+            return supertest(app)
+                .get('/bookmarks')
+                .expect(401, { error: 'Unauthorized request' })
         })
-
-        it(`getAllBookmarks() resolves all bookmarks from 'bookmarks' table`, () => {
-            //test that BookmarksService.getAllBookmarks gets data from table
-            return BookmarksService.getAllBookmarks(db)
-                .then(actual => {
-                    expect(actual).to.eql(testBookmarks)
-                })
+        it(`responds with 401 Unauthorized for GET /bookmarks`, () => {
+            return supertest(app)
+                .get('/bookmarks')
+                .expect(401, { error: 'Unauthorized request' })
         })
-
-        it(`getById() resolves a bookmark by id from 'bookmarks' table`, () => {
-            const thirdId = 3
-            const thirdTestBookmark = testBookmarks[thirdId - 1]
-            return BookmarksService.getById(db, thirdId)
-                .then(actual => {
-                    expect(actual).to.eql({
-                        id: thirdId,
-                        title: thirdTestBookmark.title,
-                        url: thirdTestBookmark.url,
-                        description: thirdTestBookmark.description,
-                        rating: thirdTestBookmark.rating,
-                    })
-                })
+        it(`responds with 401 Unauthorized for POST /bookmarks`, () => {
+            return supertest(app)
+                .post('/bookmarks')
+                .send({ title: 'test-title', url: 'http://something.com', rating: '2' })
+                .expect(401, { error: 'Unauthorized request' })
         })
-
-        it(`deleteBookmark() removes a bookmark by id from 'bookmarks' table`, () => {
-            const bookmarkId = 3
-            return BookmarksService.deleteBookmark(db, bookmarkId)
-                .then(() => BookmarksService.getAllBookmarks(db))
-                .then(allBookmarks => {
-                    const expected = testBookmarks.filter(bookmark => bookmark.id !== bookmarkId)
-                    expect(allBookmarks).to.eql(expected)
-                })
+        it(`responds with 401 Unauthorized for GET /bookmarks/:id`, () => {
+            const secondBookmark = store.bookmarks[1]
+            return supertest(app)
+                .get(`/bookmarks/${secondBookmark.id}`)
+                .expect(401, { error: 'Unauthorized request' })
         })
-        it(`updateBookmark() updates a bookmark from the 'bookmarks' table`, () => {
-            const idOfBookmarkToUpdate = 3
-            const newBookmarkData = {
-                title: 'updated title',
-                url: 'updated url',
-                description: 'updated description',
-                rating: '3'
-            }
-            return BookmarksService.updateBookmark(db, idOfBookmarkToUpdate, newBookmarkData)
-                .then(() => BookmarksService.getById(db, idOfBookmarkToUpdate))
-                .then(bookmark => {
-                    expect(bookmark).to.eql({
-                        id: idOfBookmarkToUpdate,
-                        ...newBookmarkData
-                    })
-                })
+        it(`responds with 401 Unauthorized for DELETE /bookmarks/:id`, () => {
+            const aBookmark = store.bookmarks[1]
+            return supertest(app)
+                .delete(`/bookmarks/${aBookmark}`)
+                .expect(401, { error: 'Unauthorized request' })
         })
     })
 
-    context(`Given 'bookmarks' has no data`, () => {
-        it(`getAllBookmarks() resolves an empty array`, () => {
-            return BookmarksService.getAllBookmarks(db)
-                .then(actual => {
-                    expect(actual).to.eql([])
-                })
+    describe('GET /bookmarks', () => {
+        context(`Given no bookmarks`, () => {
+            it(`responds with 200 and an empty list`, () => {
+                return supertest(app)
+                    .get('/bookmarks')
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(200, [])
+            })
         })
 
-        it(`insertBookmark() insets a new bookmark and resolves the bew bookmark with an 'id'`, () => {
-            const newBookmark = {
-                title: 'Test new title',
-                url: 'Test new url',
-                description: 'Test new description',
-                rating: '3'
-            }
-            return BookmarksService.insertBookmark(db, newBookmark)
-                .then(actual => {
-                    expect(actual).to.eql({
-                        id: 1,
-                        title: newBookmark.title,
-                        url: newBookmark.url,
-                        description: newBookmark.description,
-                        rating: newBookmark.rating,
-                    })
-                })
+
+        context(`Given 'bookmarks' has data`, () => {
+            const testBookmarks = makeBookmarksArray()
+
+            beforeEach('insert bookmarks', () => {
+                return db
+                    .into('bookmarks')
+                    .insert(testBookmarks)
+            })
+
+            it(`responds with 200 and all of the bookmarks`, () => {
+                return supertest(app)
+                    .get('/bookmarks')
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(200, testBookmarks)
+            })
+
         })
+
+        describe(`GET /bookmarks/:id`, () => {
+            context(`Given no bookmarks`, () => {
+                it(`responds with 404 bookmark doesn't exist`, () => {
+                    const bookmarkId = 123456
+                    return supertest(app)
+                        .get(`/bookmarks/${bookmarkId}`)
+                        .expect(404, { error: { message: `Bookmark doesn't exist` } })
+                })
+            })
+
+            context(`Given there are bookmarks in the database`, () => {
+                const testBookmarks = makeBookmarksArray()
+
+                beforeEach('insert bookmarks', () => {
+                    return db
+                        .into('bookmarks')
+                        .insert(testBookmarks)
+                })
+
+                it('responds with 200 and the specified bookmark', () => {
+                    const bookmarkId = 2
+                    const expectedBookmark = testBookmarks[bookmarkId - 1]
+                    return supertest(app)
+                        .get(`/bookmarks/${bookmarkId}`)
+                        .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                        .expect(200, expectedBookmark)
+                })
+            })
+        })
+
+        describe('DELETE /bookmarks/:id', () => {
+            it(`removes the bookmark by id from the store`, () => {
+                const secondBookmark = store.bookmarks[1]
+                const expectedBookmark = store.bookmarks.filter(s => s.id !== secondBookmark.id)
+                return supertest(app)
+                    .delete(`/bookmarks/${secondBookmark.id}`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(204)
+                    .then(() => {
+                        expect(store.bookmarks).to.eql(expectedBookmark)
+                    })
+            })
+            it(`returns 404 bookmark doesn't exist`, () => {
+                return supertest(app)
+                    .delete(`/bookmarks/doesnt-exist`)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(404, 'Bookmark Not Found')
+            })
+        })
+
+        describe.only(`POST /bookmarks`, () => {
+            it(`creates a bookmark, responding with 201 and the new bookmark`, function () {
+                const newBookmark = {
+                    title: 'test title',
+                    url: 'https://test.com',
+                    description: 'test description',
+                    rating: '2'
+                }
+                return supertest(app)
+                    .post('/bookmarks')
+                    .send(newBookmark)
+                    .set('Authorization', `Bearer ${process.env.API_TOKEN}`)
+                    .expect(201)
+                    .expect(res => {
+                        expect(res.body.title).to.eql(newBookmark.title)
+                        expect(res.body.url).to.eql(newBookmark.url)
+                        expect(res.body.description).to.eql(newBookmark.description)
+                        expect(res.body.rating).to.eql(newBookmark.rating)
+                        expect(res.body.id).to.be.a('string')
+                    })
+                    .then(res => {
+                        expect(store.bookmarks[store.bookmarks.length - 1])
+                    })
+            })
+        })
+
     })
 })

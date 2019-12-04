@@ -2,7 +2,6 @@ const express = require("express");
 const uuid = require("uuid/v4");
 const logger = require("../logger");
 const store = require("../store");
-const knex = require('knex')
 const BookmarksService = require('../bookmarks-service')
 
 const bookmarksRouter = express.Router();
@@ -57,7 +56,7 @@ bookmarksRouter
                     logger.error(`Bookmark with id ${bookmark_id} not found.`)
                     return res
                         .status(404)
-                        .send('Bookmark Not Found')
+                        .json({ error: { message: 'Bookmark Not Found' } })
                 }
                 res.json(bookmark)
             })
