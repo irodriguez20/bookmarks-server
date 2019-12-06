@@ -9,29 +9,28 @@ const logger = require('./logger')
 
 const app = express()
 
-const morganOption = (NODE_ENV === 'production')
-    ? 'tiny'
-    : 'common';
+app.use(morgan((NODE_ENV === 'production') ? 'tiny' : 'common', {
+    skip: () => NODE_ENV === 'test'
+}))
 
-app.use(morgan(morganOption))
-app.use(helmet())
 app.use(cors())
-app.use(bookmarksRouter)
+app.use(helmet())
+app.use(function validateBearerToken(req, res, next) {
+    const authToken = req.get('Authorization')
+    const API_TOKEN = process.env.API_TOKEN
+
+    if (!authToken || authToken.split(' ')[1] !== API_TOKEN) {
+        logger.error(`Unauthorized request to path: ${req.path}`)
+        return res.status(401).json({ error: 'Unauthorized request' })
+    }
+
+    next()
+})
+
+app.use('/api/bookmarks', bookmarksRouter)
 
 app.get('/', (req, res) => {
     res.send('Hello, world!')
-})
-
-app.use(function validateBearerToken(req, res, next) {
-    const apiToken = process.env.API_TOKEN
-    const authToken = req.get('Authorization')
-
-    if (!authToken || authToken.split(' ')[1] !== apiToken) {
-        logger.error(`Unauthorized request to path: ${req.path}`);
-        return res.status(401).json({ error: 'Unauthorized request' })
-    }
-    // move to the next middleware
-    next()
 })
 
 app.use(function errorHandler(error, req, res, next) {
