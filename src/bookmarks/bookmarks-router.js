@@ -96,32 +96,30 @@ bookmarksRouter
             })
             .catch(next);
     })
-    .patch(
-        (bodyParser,
-            (req, res, next) => {
-                const { title, url, description, rating } = req.body;
-                const bookmarkToUpdate = { title, url, description, rating };
+    .patch(bodyParser, (req, res, next) => {
+        // console.log("in .patch", req)
+        const { title, url, description, rating } = req.body;
+        const bookmarkToUpdate = { title, url, description, rating };
 
-                const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean)
-                    .length;
-                if (numberOfValues === 0) {
-                    return res.status(400).json({
-                        error: {
-                            message: `Request body must contain either 'title, 'url', 'description', or 'rating'`
-                        }
-                    });
+        const numberOfValues = Object.values(bookmarkToUpdate).filter(Boolean).length;
+        if (numberOfValues === 0) {
+            logger.error(`Invalid update without required fields.`)
+            return res.status(400).json({
+                error: {
+                    message: `Request body must contain either 'title', 'url', 'description', or 'rating'`
                 }
+            });
+        }
 
-                BookmarksService.updateBookmark(
-                    req.app.get("db"),
-                    req.params.bookmark_id,
-                    bookmarkToUpdate
-                )
-                    .then(numRowsAffected => {
-                        res.status(204).end();
-                    })
-                    .catch(next);
+        BookmarksService.updateBookmark(
+            req.app.get("db"),
+            req.params.bookmark_id,
+            bookmarkToUpdate
+        )
+            .then(numRowsAffected => {
+                res.status(204).end();
             })
-    );
+            .catch(next);
+    });
 
 module.exports = bookmarksRouter;
